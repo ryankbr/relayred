@@ -90,7 +90,7 @@ def fetch_cve_database():
     Load the CVE database from a local file named "cvelistV5-main.zip".
     If the file isn't found, download it from the online source into the same directory.
     """
-    zip_filename = "cvelistV5-main.zip"
+    zip_filename = "cvelistV5-main"
     if not os.path.exists(zip_filename):
         print("cve database zip not found locally. downloading...")
         url = "https://www.cve.org/Downloads/main.zip"
@@ -159,6 +159,9 @@ def save_cve_report(cve_results, filename="cve_report.txt"):
     except Exception as e:
         print(f"failed to save cve report: {e}")
 
+def nvd_lookup():
+    return None
+
 # --- main sequence ---
 def main():
     global relay_ip, TEST_MODE
@@ -183,6 +186,7 @@ def main():
         print(f"\nextracted model: {model}")
     else:
         print("\nmodel info not found in telnet fingerprint.")
+
     
     # pull cve database and search for vulnerabilities related to the model
     if model:
