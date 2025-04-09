@@ -1,0 +1,17 @@
+# python artifacts
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# environment / IDE settings
+.env
+.vscode/
+
+# cve data - if it's downloaded or large
+cvelistV5-main/
+cve_report.txt
+
+# OS-generated files
+.DS_Store
+Thumbs.db
