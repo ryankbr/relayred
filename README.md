@@ -83,4 +83,3 @@ Made with caffeine and curiosity by the **Relay Red Team**
 
 This tool is for research, education, and internal lab testing only.  
 Do not scan devices you do not own or have explicit permission to test.
-```
