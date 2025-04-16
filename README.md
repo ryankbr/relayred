@@ -1,4 +1,3 @@
-```markdown
 # 🔐 Cyber Power Relay Vulnerability Scanner 🔌
 
 > **Built for Siemens & the iStar Lab**  
@@ -40,46 +39,37 @@ pip install telnetlib3 rich ftplib
 # download the CVE feed:
 # 1. go to https://nvd.nist.gov/vuln/data-feeds#JSON_FEED  
 # 2. grab “nvdcve-1.1-recent.json” and drop it here
-```
-
----
-
-## 🧑‍💻 Usage
-
-### 1. Real Relay Scan
-```bash
+🧑‍💻 Usage
+1. Real Relay Scan
+bash
+Copy
+Edit
 python sel_scanner.py 192.168.0.10
-```
-
-### 2. Simulated Test Mode
-```bash
+2. Simulated Test Mode
+bash
+Copy
+Edit
 python sel_scanner.py 127.0.0.1 test
-```
-
-### 3. Manual Demo Mode
-```bash
+3. Manual Demo Mode
+bash
+Copy
+Edit
 python sel_scanner.py demo SEL-787 R110-V1
 # add “test” at end to simulate elevation & FTP too
-```
-
----
-
-## 📁 Project Layout
-
-```
+📁 Project Layout
+graphql
+Copy
+Edit
 relayred/
 ├── sel_scanner.py           # main CLI scanner
 ├── sel_fingerprint.py       # telnet “id” parser
 ├── sel_ftp.py               # ftp default‑creds tester
 ├── nvdcve-1.1-recent.json   # NVD CVE feed (download manually)
 └── .gitignore
-```
-
----
-
-## 🌈 Example Output
-
-```text
+🌈 Example Output
+text
+Copy
+Edit
 🇨🇭 scanning relay at 10.190.42.105
 
 📡 telnet fingerprint result:
@@ -102,18 +92,10 @@ relayred/
 ✔️ cve_report.txt saved
 
 🔌 ftp login success for 10.190.42.105
-```
+🙌 Contributors
+Relay Red Team
+Erin Cana · Ty Lavergne · Damian Lall · Ryan Kabir · Samuel Mueller
 
----
-
-## 🙌 Contributors
-
-**Relay Red Team**  
-Erin Cana · Ty Lavergne · Damian Lall · Ryan Kabir · Samuel Mueller  
-
----
-
-## ⚠️ Disclaimer
-
-For research & lab use only.  
-Please **do not** scan devices you do not own or have permission to test.
+⚠️ Disclaimer
+For research & lab use only.
+Please do not scan devices you do not own or have permission to test.
