@@ -1,0 +1,10 @@
+123456
+password
+letmein
+admin
+root
+guest
+ftp123
+siemens
+relaysecure
+naruto
