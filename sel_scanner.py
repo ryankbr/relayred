@@ -55,19 +55,35 @@ def telnet_fingerprint(ip):
         return {}
 
 # --- elevation check ---
+# --- elevation check ---
 def check_elevation(ip):
-    creds = [("ACC","ACC"), ("2AC","2AC"), ("CAL","CAL")]
+    # tries acc / 2ac / cal and waits for password prompt
+    async def try_login(cmd, pwd):
+        try:
+            reader, writer = await telnetlib3.open_connection(ip, 23)
+            writer.write(cmd + "\r\n")      # send user level (acc, 2ac, cal)
+            await writer.drain()
+            # wait for the relay to ask for password (simple pause works for most relays)
+            await asyncio.sleep(0.4)
+            writer.write(pwd + "\r\n")      # send password
+            await writer.drain()
+            await asyncio.sleep(0.4)
+            out = await reader.read(4096)
+            writer.close()
+            return "ok" in out.lower() or "welcome" in out.lower()
+        except Exception:
+            return False
+
+    creds = [("ACC", "OTTER"), ("2AC", "TAIL"), ("CAL", "CLARKE")]
     print("\nchecking elevation credentials:")
     for user, pwd in creds:
         if TEST_MODE:
             print(f"  {user}: simulated success")
             continue
-        try:
-            out = asyncio.run(telnet_command(ip, 23, f"{user} {pwd}"))
-            status = "success" if "ok" in out.lower() or "welcome" in out.lower() else "failed"
-            print(f"  {user}: {status}")
-        except Exception as e:
-            print(f"  {user}: error")
+        result = asyncio.run(try_login(user.lower(), pwd))
+        status = "success" if result else "failed"
+        print(f"  {user}: {status}")
+
 
 # --- ftp test ---
 def test_ftp(ip):
