@@ -1,6 +1,7 @@
+```markdown
 # 🔐 Cyber Power Relay Vulnerability Scanner 🔌
 
-> **Built for Siemens & the iStar Lab**  
+> Built for TAMU GCRI, Siemens, & the iStar Lab  
 > ⚡ Python • 🛡️ Security • 🔬 Lab-Ready
 
 A one‑stop CLI tool to:  
@@ -17,8 +18,7 @@ A one‑stop CLI tool to:
   • Extracts MODEL, FW, FID, plus bootloader info  
 - **Privilege Elevation UI**  
   • Animated Rich boxes for ACC → 2AC → CAL  
-  • Real‑time color updates:  
-  &nbsp;&nbsp;– 🟡 pending • 🟢 success • 🔴 failed • ⚪ skipped  
+  • Real‑time color updates: 🟡 pending • 🟢 success • 🔴 failed • ⚪ skipped  
 - **CVE Lookup**  
   • Scans `nvdcve-1.1-recent.json` for your model  
   • Saves `cve_report.txt` with ID + description  
@@ -32,45 +32,51 @@ A one‑stop CLI tool to:
 
 ## 🚀 Installation
 
-bash
+```bash
 git clone https://github.com/ryankbr/relayred.git
 cd relayred
 pip install telnetlib3 rich
-# download the CVE feed:
-# 1. go to https://nvd.nist.gov/vuln/data-feeds#JSON_FEED  
-# 2. grab “nvdcve-1.1-recent.json” and drop it here
+# download CVE feed:
+# 1. go to https://nvd.nist.gov/vuln/data-feeds#JSON_FEED
+# 2. grab "nvdcve-1.1-recent.json" and place it here
+```
 
-🧑‍💻 Usage
-1. Real Relay Scan
-bash
-Copy
-Edit
+---
+
+## 🧑‍💻 Usage
+
+### Real Relay Scan
+```bash
 python sel_scanner.py 192.168.0.10
-2. Simulated Test Mode
-bash
-Copy
-Edit
+```
+
+### Simulated Test Mode
+```bash
 python sel_scanner.py 127.0.0.1 test
-3. Manual Demo Mode
-bash
-Copy
-Edit
+```
+
+### Manual Demo Mode
+```bash
 python sel_scanner.py demo SEL-787 R110-V1
-# add “test” at end to simulate elevation & FTP too
-📁 Project Layout
-graphql
-Copy
-Edit
+# add "test" at end to simulate elevation & FTP too
+```
+
+---
+
+## 📁 Project Layout
+```text
 relayred/
 ├── sel_scanner.py           # main CLI scanner
-├── sel_fingerprint.py       # telnet “id” parser
+├── sel_fingerprint.py       # telnet "id" parser
 ├── sel_ftp.py               # ftp default‑creds tester
 ├── nvdcve-1.1-recent.json   # NVD CVE feed (download manually)
 └── .gitignore
-🌈 Example Output
-text
-Copy
-Edit
+```
+
+---
+
+## 🌈 Example Output
+```text
 🇨🇭 scanning relay at 10.190.42.105
 
 📡 telnet fingerprint result:
@@ -88,15 +94,28 @@ Edit
 
 📡 loaded cve database
 🔍 found 2 CVEs for SEL-787:
-  • CVE-2023-1234: buffer overflow in power logic  
-  • CVE-2022-5678: auth bypass in web interface  
+  • CVE-2023-1234: buffer overflow in power logic
+  • CVE-2022-5678: auth bypass in web interface
 ✔️ cve_report.txt saved
 
 🔌 ftp login success for 10.190.42.105
-🙌 Contributors
-Relay Red Team
-Erin Cana · Ty Lavergne · Damian Lall · Ryan Kabir · Samuel Mueller
+```
 
-⚠️ Disclaimer
-For research & lab use only.
-Please do not scan devices you do not own or have permission to test.
+---
+
+## 🙌 Contributors
+
+**Relay Red Team**  
+Erin Cana · Ty Lavergne · Damian Lall · Ryan Kabir · Samuel Mueller  
+
+Special Thank You to:
+- Dr. Hammad of the iSTAR Lab
+- Mr. Simon Loo of SIEMENS
+
+---
+
+## ⚠️ Disclaimer
+
+For research & lab use only.  
+Please **do not** scan devices you do not own or have permission to test.
+```
