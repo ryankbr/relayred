@@ -1,3 +1,17 @@
+"""
+cyber power relay vulnerability scanner
+prepared for siemens and the istar lab
+
+this script
+• fingerprints the relay (model / fw)
+• tries elevation acc → 2ac → cal (with rich ui boxes)
+• checks default ftp creds
+• looks up cves in nvdcve‑1.1‑recent.json
+
+dependencies:
+    pip install telnetlib3 rich
+"""
+
 import sys
 import os
 import asyncio
@@ -5,132 +19,164 @@ import re
 import telnetlib3
 import ftplib
 import json
+from rich.console import Console
+from rich.panel import Panel
+from rich.live import Live
+from rich.table import Table
+from rich.text import Text
 
-# global variables
+# global flags
 relay_ip = None
 TEST_MODE = False
+console = Console()
 
-# --- print a welcome banner to terminal ---
+# --- banner ---------------------------------------------------------------
 def print_welcome():
     print("=" * 50)
     print("cyber power relay vulnerability scanner")
     print("prepared for siemens and the istar lab")
     print("=" * 50)
 
-# --- run a telnet command to the relay and return its output ---
-async def telnet_command(ip, port=23, command=""):
-    # opens telnet connection and sends a command
+# --- run one telnet command ----------------------------------------------
+async def telnet_command(ip, cmd, port=23):
     reader, writer = await telnetlib3.open_connection(ip, port)
-    writer.write(command + "\r\n")  # write the command
-    await writer.drain()            # flush it out
-    await asyncio.sleep(1)          # wait for response
-    output = await reader.read(4096)  # read up to 4kb
+    writer.write(cmd + "\r\n")
+    await writer.drain()
+    await asyncio.sleep(0.8)              # short wait
+    out = await reader.read(4096)
     writer.close()
-    return output
+    return out
 
-# --- request fingerprint info from the relay and parse it ---
+# --- fingerprint model / fw / fid ----------------------------------------
 def telnet_fingerprint(ip):
     if TEST_MODE:
-        # simulate fingerprint response in test mode
-        data = {
-            "MODEL": {"value": "SEL351"}, 
-            "FW": {"value": "2.0"}, 
-            "FID": {"value": "SEL-787-R110-V1-Z002001-D20190508"}
+        fake = {
+            "MODEL": {"value": "SEL351"},
+            "FW":    {"value": "2.0"},
+            "FID":   {"value": "SEL-787-R110-V1-Z002001-D20190508"},
         }
         print("using simulated telnet fingerprint:")
-        for k, v in data.items():
+        for k, v in fake.items():
             print(f"  {k}: {v['value']}")
-        return data
+        return fake
 
     try:
-        # run actual telnet "id" command
-        raw = asyncio.run(telnet_command(ip, 23, "id"))
-        pattern = re.compile(r'"([^=]+)=([^"]+)"\s*,\s*"([^"]+)"')
+        raw = asyncio.run(telnet_command(ip, "id"))
+        pat = re.compile(r'"([^=]+)=([^"]+)"\s*,\s*"[^"]*"')
         parsed = {}
         print("telnet fingerprint result:")
-        for line in raw.splitlines():
-            m = pattern.search(line)
+        for ln in raw.splitlines():
+            m = pat.search(ln)
             if m:
-                key, value = m.group(1), m.group(2)
-                parsed[key] = {"value": value}
-                print(f"  {key}: {value}")
+                parsed[m.group(1)] = {"value": m.group(2)}
+                print(f"  {m.group(1)}: {m.group(2)}")
         return parsed
     except Exception as e:
         print(f"error fingerprinting: {e}")
         return {}
 
-# --- try privilege elevation using default passwords for acc, 2ac, cal ---
-def check_elevation(ip):
-    # this async function sends the elevation level and waits for password prompt
-    async def try_login(cmd, pwd):
-        try:
-            reader, writer = await telnetlib3.open_connection(ip, 23)
-            writer.write(cmd + "\r\n")  # send the elevation level (e.g., acc)
-            await writer.drain()
-            await asyncio.sleep(0.4)   # wait briefly for password prompt
-            writer.write(pwd + "\r\n") # send the password
-            await writer.drain()
-            await asyncio.sleep(0.4)   # wait for confirmation output
-            out = await reader.read(4096)
-            writer.close()
-            # success if output contains ok or welcome
-            return "ok" in out.lower() or "welcome" in out.lower()
-        except Exception:
-            return False
+# --- helper: rich box renderer -------------------------------------------
+def build_boxes(status_map, labels):
+    table = Table.grid(padding=(1, 2))
+    boxes = []
+    for name in labels:
+        state = status_map[name]
+        color = {
+            "pending": "yellow",
+            "success": "green",
+            "failed":  "red",
+            "skipped": "grey50"
+        }[state]
+        txt = Text(f"{name}\n{state}", justify="center", style="bold white")
+        boxes.append(Panel(txt, width=14, style=color))
+    table.add_row(*boxes)
+    return table
 
-    # list of default roles and corresponding passwords
+# --- elevation acc -> 2ac -> cal with rich ui -----------------------------
+async def check_elevation(ip):
     creds = [("ACC", "OTTER"), ("2AC", "TAIL"), ("CAL", "CLARKE")]
+    status = {name: "pending" for name, _ in creds}
+    labels = [n for n, _ in creds]
+
     print("\nchecking elevation credentials:")
 
-    for user, pwd in creds:
-        if TEST_MODE:
-            # simulate a successful login
-            print(f"  {user}: simulated success")
-            continue
-        # run the login attempt and report success/failure
-        result = asyncio.run(try_login(user.lower(), pwd))
-        status = "success" if result else "failed"
-        print(f"  {user}: {status}")
+    # test mode: just show all success
+    if TEST_MODE:
+        for n in labels:
+            status[n] = "success"
+        console.print(build_boxes(status, labels))
+        return
 
-# --- test ftp login using default credentials ---
-def test_ftp(ip):
+    # live update of three boxes only
+    with Live(build_boxes(status, labels), refresh_per_second=4, console=console) as live:
+        reader, writer = await telnetlib3.open_connection(ip, 23)
+
+        for idx, (name, pwd) in enumerate(creds):
+            # simulate blinking
+            await asyncio.sleep(0.3)
+
+            # send role
+            writer.write(name.lower() + "\r\n")
+            await writer.drain()
+            await asyncio.sleep(0.5)
+
+            # send password
+            writer.write(pwd + "\r\n")
+            await writer.drain()
+            await asyncio.sleep(0.8)
+
+            resp = await reader.read(1024)
+
+            # determine success or fail
+            if "TRNSFRMR" in resp:
+                status[name] = "success"
+            else:
+                status[name] = "failed"
+                # mark later levels as skipped
+                for later, _ in creds[idx+1:]:
+                    status[later] = "skipped"
+                break
+
+            # update live display
+            live.update(build_boxes(status, labels))
+
+        writer.close()
+        # final update
+        live.update(build_boxes(status, labels))
+
+# --- ftp login test -------------------------------------------------------
+def ftp_check(ip):
     if TEST_MODE:
         print(f"\nsimulated ftp login success for {ip}")
         return
     try:
         with ftplib.FTP(ip) as ftp:
-            ftp.login(user="FTPUSER", passwd="TAIL")
+            ftp.login("FTPUSER", "TAIL")
             print(f"\nftp login success for {ip}")
     except:
         print(f"\nftp login failed for {ip}")
 
-# --- load the nvd cve json database file ---
+# --- nvd cve feed loader -------------------------------------------------
 def load_cve_db():
     fn = "nvdcve-1.1-recent.json"
-    if not os.path.exists(fn):
-        print(f"{fn} missing; download from NVD feeds")
+    if not os.path.isfile(fn):
+        print(f"{fn} missing – download from nvd feeds")
         return None
     try:
-        with open(fn, "r", encoding="utf-8") as f:
+        with open(fn, encoding="utf-8") as f:
             data = json.load(f)
-        print("loaded CVE database")
+        print("loaded cve database")
         return data
     except PermissionError:
-        # fix file permissions and try again
         os.chmod(fn, 0o644)
-        try:
-            with open(fn, "r", encoding="utf-8") as f:
-                data = json.load(f)
-            print("loaded CVE database after chmod")
-            return data
-        except:
-            pass
-    except:
-        pass
-    return None
+        with open(fn, encoding="utf-8") as f:
+            return json.load(f)
+    except Exception as e:
+        print(f"error loading cve db: {e}")
+        return None
 
-# --- search cve entries that match the relay model ---
-def search_cves(db, model):
+# --- find and save cves ---------------------------------------------------
+def find_cves(db, model):
     hits = []
     for item in db.get("CVE_Items", []):
         for d in item["cve"]["description"]["description_data"]:
@@ -139,81 +185,62 @@ def search_cves(db, model):
                 break
     return hits
 
-# --- save matching cves to a simple text file ---
-def save_report(hits):
+def save_cves(hits):
     with open("cve_report.txt", "w", encoding="utf-8") as f:
-        for it in hits:
-            cid = it["cve"]["CVE_data_meta"]["ID"]
-            desc = it["cve"]["description"]["description_data"][0]["value"]
+        for h in hits:
+            cid = h["cve"]["CVE_data_meta"]["ID"]
+            desc = h["cve"]["description"]["description_data"][0]["value"]
             f.write(f"{cid}\n{desc}\n{'-'*40}\n")
     print("cve report saved to cve_report.txt")
 
-# --- main entry point ---
+# --- main ----------------------------------------------------------------
 def main():
     global relay_ip, TEST_MODE
-
-    # check args and activate test mode
     if len(sys.argv) < 2:
-        print("usage: python sel_scanner.py <relay_ip> [test|demo model version]")
+        print("usage: python sel_scanner.py <relay_ip> [test|demo model ver]")
         sys.exit(1)
 
     relay_ip = sys.argv[1]
-    if any(a.lower() == "test" for a in sys.argv):
-        TEST_MODE = True
+    TEST_MODE = any(a.lower() == "test" for a in sys.argv)
 
     print_welcome()
 
-    model = None
-    version = None
-
-    # handle demo mode where model/version are passed directly
+    # demo override
     if relay_ip.lower() == "demo" and len(sys.argv) >= 4:
-        model = sys.argv[2]
-        version = sys.argv[3]
-        print(f"\nrunning demo with model={model}, version={version}")
+        model, version = sys.argv[2], sys.argv[3]
+        print(f"\ndemo mode: model={model}, version={version}")
     else:
-        print(f"\nscanning relay at ip: {relay_ip}\n")
-        data = telnet_fingerprint(relay_ip)
-        model = data.get("MODEL", {}).get("value")
-        version = data.get("FW", {}).get("value")
-
-        # try to extract model/version from FID if needed
-        if not version and "FID" in data:
-            fid = data["FID"]["value"]
-            vm = re.search(r"(R\d+-V\d+)", fid)
-            if vm:
-                version = vm.group(1)
+        print(f"\nscanning relay at {relay_ip}\n")
+        fp = telnet_fingerprint(relay_ip)
+        model = fp.get("MODEL", {}).get("value")
+        version = fp.get("FW", {}).get("value")
+        if not version and "FID" in fp:
+            fid = fp["FID"]["value"]
+            vmatch = re.search(r"(R\d+-V\d+)", fid)
+            version = vmatch.group(1) if vmatch else None
             if not model:
                 mm = re.match(r"(SEL-\d+)", fid)
-                if mm:
-                    model = mm.group(1)
+                model = mm.group(1) if mm else None
+        print(f"model: {model or 'n/a'}  |  version: {version or 'n/a'}")
 
-        print(f"\nextracted model: {model or 'none'}")
-        print(f"extracted version: {version or 'none'}")
+    # elevation test with rich ui
+    asyncio.run(check_elevation(relay_ip))
 
-    # check acc, 2ac, cal credentials
-    check_elevation(relay_ip)
-
-    # lookup vulnerabilities based on model name
+    # cve lookup
     if model:
         db = load_cve_db()
         if db:
-            hits = search_cves(db, model)
-            print(f"\nfound {len(hits)} CVEs for {model}:")
-            for it in hits:
-                cid = it["cve"]["CVE_data_meta"]["ID"]
-                desc = it["cve"]["description"]["description_data"][0]["value"]
-                print(f"  {cid}: {desc}")
+            hits = find_cves(db, model)
+            print(f"\n{len(hits)} cves found for {model}")
+            for h in hits[:5]:
+                print(" ", h["cve"]["CVE_data_meta"]["ID"])
             if hits:
-                save_report(hits)
-        else:
-            print("\nno CVE database loaded")
+                save_cves(hits)
     else:
-        print("\nskipping CVE scan (no model)")
+        print("no model; skipping cve scan")
 
-    # check ftp login
-    test_ftp(relay_ip)
+    # ftp test
+    ftp_check(relay_ip)
 
-# run main function
 if __name__ == "__main__":
     main()
