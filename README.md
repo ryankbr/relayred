@@ -32,7 +32,7 @@ A one‑stop CLI tool to:
 
 ## 🚀 Installation
 
-```bash
+bash
 git clone https://github.com/ryankbr/relayred.git
 cd relayred
 pip install telnetlib3 rich
