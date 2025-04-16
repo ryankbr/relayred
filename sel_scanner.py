@@ -24,6 +24,9 @@ from rich.panel import Panel
 from rich.live import Live
 from rich.table import Table
 from rich.text import Text
+from rich import box
+from rich.align import Align
+from rich.spinner import Spinner
 
 # global flags
 relay_ip = None
@@ -32,13 +35,23 @@ console = Console()
 
 # --- banner ---------------------------------------------------------------
 def print_welcome():
-    print("=" * 50)
-    print("cyber power relay vulnerability scanner")
-    print("prepared for siemens and the istar lab")
-    print("=" * 50)
+    """print a fancy colored banner"""
+    title = Text("cyber power relay", style="bold cyan", justify="center")
+    subtitle = Text("vulnerability scanner", style="bold magenta", justify="center")
+    panel = Panel(
+        Align.center(Text.assemble(title, "\n", subtitle)),
+        box=box.DOUBLE,
+        padding=(1, 4),
+        border_style="bright_blue",
+    )
+    console.print(panel)
+    console.print(
+        Align.center("[bright_yellow]prepared for Siemens & the iStar Lab[/bright_yellow]\n")
+    )
 
 # --- run one telnet command ----------------------------------------------
 async def telnet_command(ip, cmd, port=23):
+    """open a telnet connection, send cmd, return output"""
     reader, writer = await telnetlib3.open_connection(ip, port)
     writer.write(cmd + "\r\n")
     await writer.drain()
@@ -49,34 +62,37 @@ async def telnet_command(ip, cmd, port=23):
 
 # --- fingerprint model / fw / fid ----------------------------------------
 def telnet_fingerprint(ip):
+    """collect MODEL, FW, FID via telnet 'id' command"""
     if TEST_MODE:
         fake = {
             "MODEL": {"value": "SEL351"},
             "FW":    {"value": "2.0"},
             "FID":   {"value": "SEL-787-R110-V1-Z002001-D20190508"},
         }
-        print("using simulated telnet fingerprint:")
+        console.print(Panel("using simulated telnet fingerprint", style="yellow"))
         for k, v in fake.items():
-            print(f"  {k}: {v['value']}")
+            console.print(f"  [cyan]{k}[/cyan]: [white]{v['value']}[/white]")
         return fake
 
     try:
         raw = asyncio.run(telnet_command(ip, "id"))
         pat = re.compile(r'"([^=]+)=([^"]+)"\s*,\s*"[^"]*"')
         parsed = {}
-        print("telnet fingerprint result:")
+        console.print(Panel("telnet fingerprint result", style="bright_green"))
         for ln in raw.splitlines():
             m = pat.search(ln)
             if m:
-                parsed[m.group(1)] = {"value": m.group(2)}
-                print(f"  {m.group(1)}: {m.group(2)}")
+                key, val = m.group(1), m.group(2)
+                parsed[key] = {"value": val}
+                console.print(f"  [cyan]{key}[/cyan]: [white]{val}[/white]")
         return parsed
     except Exception as e:
-        print(f"error fingerprinting: {e}")
+        console.print(f"[red]error fingerprinting:[/red] {e}")
         return {}
 
 # --- helper: rich box renderer -------------------------------------------
 def build_boxes(status_map, labels):
+    """render three side-by-side status boxes"""
     table = Table.grid(padding=(1, 2))
     boxes = []
     for name in labels:
@@ -88,95 +104,93 @@ def build_boxes(status_map, labels):
             "skipped": "grey50"
         }[state]
         txt = Text(f"{name}\n{state}", justify="center", style="bold white")
-        boxes.append(Panel(txt, width=14, style=color))
+        boxes.append(Panel(txt, width=14, style=color, box=box.ROUNDED))
     table.add_row(*boxes)
     return table
 
 # --- elevation acc -> 2ac -> cal with rich ui -----------------------------
 async def check_elevation(ip):
+    """attempt acc→2ac→cal in one telnet session, updating ui boxes"""
     creds = [("ACC", "OTTER"), ("2AC", "TAIL"), ("CAL", "CLARKE")]
     status = {name: "pending" for name, _ in creds}
     labels = [n for n, _ in creds]
 
-    print("\nchecking elevation credentials:")
+    console.print("\n[bold]checking elevation credentials:[/bold]\n")
 
-    # test mode: just show all success
     if TEST_MODE:
         for n in labels:
             status[n] = "success"
         console.print(build_boxes(status, labels))
         return
 
-    # live update of three boxes only
-    with Live(build_boxes(status, labels), refresh_per_second=4, console=console) as live:
-        reader, writer = await telnetlib3.open_connection(ip, 23)
+    console.print(Spinner("dots", text="connecting telnet…"), justify="center")
+    reader, writer = await telnetlib3.open_connection(ip, 23)
 
+    with Live(build_boxes(status, labels), refresh_per_second=4, console=console) as live:
         for idx, (name, pwd) in enumerate(creds):
-            # simulate blinking
             await asyncio.sleep(0.3)
 
-            # send role
-            writer.write(name.lower() + "\r\n")
+            writer.write(name.lower() + "\r\n")  # send role
             await writer.drain()
             await asyncio.sleep(0.5)
 
-            # send password
-            writer.write(pwd + "\r\n")
+            writer.write(pwd + "\r\n")           # send password
             await writer.drain()
             await asyncio.sleep(0.8)
 
             resp = await reader.read(1024)
 
-            # determine success or fail
+            # determine success or fail (do NOT change this logic)
             if "TRNSFRMR" in resp:
                 status[name] = "success"
             else:
                 status[name] = "failed"
-                # mark later levels as skipped
+                # skip remaining levels
                 for later, _ in creds[idx+1:]:
                     status[later] = "skipped"
                 break
 
-            # update live display
             live.update(build_boxes(status, labels))
 
         writer.close()
-        # final update
         live.update(build_boxes(status, labels))
 
 # --- ftp login test -------------------------------------------------------
 def ftp_check(ip):
+    """attempt ftp login with default creds"""
     if TEST_MODE:
-        print(f"\nsimulated ftp login success for {ip}")
+        console.print(f"\n[grey50]simulated ftp login success for {ip}[/grey50]")
         return
     try:
         with ftplib.FTP(ip) as ftp:
             ftp.login("FTPUSER", "TAIL")
-            print(f"\nftp login success for {ip}")
+            console.print(f"\n[green]ftp login success for {ip}[/green]")
     except:
-        print(f"\nftp login failed for {ip}")
+        console.print(f"\n[red]ftp login failed for {ip}[/red]")
 
 # --- nvd cve feed loader -------------------------------------------------
 def load_cve_db():
+    """load local nvdcve-1.1-recent.json (download from NVD if missing)"""
     fn = "nvdcve-1.1-recent.json"
     if not os.path.isfile(fn):
-        print(f"{fn} missing – download from nvd feeds")
+        console.print(f"[red]{fn} missing – download from nvd feeds[/red]")
         return None
     try:
         with open(fn, encoding="utf-8") as f:
             data = json.load(f)
-        print("loaded cve database")
+        console.print("[bright_green]loaded cve database[/bright_green]")
         return data
     except PermissionError:
         os.chmod(fn, 0o644)
         with open(fn, encoding="utf-8") as f:
             return json.load(f)
     except Exception as e:
-        print(f"error loading cve db: {e}")
+        console.print(f"[red]error loading cve db:[/red] {e}")
         return None
 
-# --- find and save cves ---------------------------------------------------
+# --- find and save cves --------------------------------------------------
 def find_cves(db, model):
+    """search CVE_Items for entries mentioning the model"""
     hits = []
     for item in db.get("CVE_Items", []):
         for d in item["cve"]["description"]["description_data"]:
@@ -186,18 +200,20 @@ def find_cves(db, model):
     return hits
 
 def save_cves(hits):
+    """write found CVEs to cve_report.txt"""
     with open("cve_report.txt", "w", encoding="utf-8") as f:
         for h in hits:
             cid = h["cve"]["CVE_data_meta"]["ID"]
             desc = h["cve"]["description"]["description_data"][0]["value"]
             f.write(f"{cid}\n{desc}\n{'-'*40}\n")
-    print("cve report saved to cve_report.txt")
+    console.print("[bright_blue]cve report saved to cve_report.txt[/bright_blue]")
 
 # --- main ----------------------------------------------------------------
 def main():
     global relay_ip, TEST_MODE
+
     if len(sys.argv) < 2:
-        print("usage: python sel_scanner.py <relay_ip> [test|demo model ver]")
+        console.print("[red]usage: python sel_scanner.py <relay_ip> [test|demo model ver][/red]")
         sys.exit(1)
 
     relay_ip = sys.argv[1]
@@ -208,12 +224,12 @@ def main():
     # demo override
     if relay_ip.lower() == "demo" and len(sys.argv) >= 4:
         model, version = sys.argv[2], sys.argv[3]
-        print(f"\ndemo mode: model={model}, version={version}")
+        console.print(f"\n[bold yellow]demo mode:[/bold yellow] model={model}, version={version}")
     else:
-        print(f"\nscanning relay at {relay_ip}\n")
+        console.print(f"\n[cyan]scanning relay at {relay_ip}[/cyan]\n")
         fp = telnet_fingerprint(relay_ip)
-        model = fp.get("MODEL", {}).get("value")
-        version = fp.get("FW", {}).get("value")
+        model  = fp.get("MODEL", {}).get("value")
+        version= fp.get("FW", {}).get("value")
         if not version and "FID" in fp:
             fid = fp["FID"]["value"]
             vmatch = re.search(r"(R\d+-V\d+)", fid)
@@ -221,7 +237,22 @@ def main():
             if not model:
                 mm = re.match(r"(SEL-\d+)", fid)
                 model = mm.group(1) if mm else None
-        print(f"model: {model or 'n/a'}  |  version: {version or 'n/a'}")
+
+        # ** highlight model & version prominently **
+        info = Text.assemble(
+            (" MODEL: ", "bold white on blue "),
+            (model or "n/a", "bold yellow "),
+            ("\n VERSION: ", "bold white on blue "),
+            (version or "n/a", "bold yellow ")
+        )
+        panel = Panel(
+            Align.center(info),
+            box=box.HEAVY,
+            border_style="bright_magenta",
+            padding=(1, 4),
+            title="[bold magenta]detected relay[/bold magenta]"
+        )
+        console.print(panel)
 
     # elevation test with rich ui
     asyncio.run(check_elevation(relay_ip))
@@ -231,13 +262,13 @@ def main():
         db = load_cve_db()
         if db:
             hits = find_cves(db, model)
-            print(f"\n{len(hits)} cves found for {model}")
+            console.print(f"\n[bold]found {len(hits)} cves for {model}[/bold]")
             for h in hits[:5]:
-                print(" ", h["cve"]["CVE_data_meta"]["ID"])
+                console.print("  •", h["cve"]["CVE_data_meta"]["ID"])
             if hits:
                 save_cves(hits)
     else:
-        print("no model; skipping cve scan")
+        console.print("[yellow]no model; skipping cve scan[/yellow]")
 
     # ftp test
     ftp_check(relay_ip)
