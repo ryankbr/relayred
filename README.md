@@ -1,4 +1,3 @@
-```markdown
 # 🔐 Cyber Power Relay Vulnerability Scanner 🔌
 
 > Built for TAMU GCRI, Siemens, & the iStar Lab  
@@ -118,4 +117,4 @@ Special Thank You to:
 
 For research & lab use only.  
 Please **do not** scan devices you do not own or have permission to test.
-```
+
