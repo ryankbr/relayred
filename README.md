@@ -1,9 +1,10 @@
+```markdown
 # 🔐 Cyber Power Relay Vulnerability Scanner 🔌
 
-> **Built for Siemens & the iStar Lab**  
+> **Built for Siemens & the iStar Lab**  
 > ⚡ Python • 🛡️ Security • 🔬 Lab-Ready
 
-A one‑stop CLI tool to:
+A one‑stop CLI tool to:  
 1. 🔍 Fingerprint SEL relays over Telnet  
 2. 🧠 Lookup CVEs from the NVD feed  
 3. 🔒 Test default FTP credentials  
@@ -39,37 +40,46 @@ pip install telnetlib3 rich ftplib
 # download the CVE feed:
 # 1. go to https://nvd.nist.gov/vuln/data-feeds#JSON_FEED  
 # 2. grab “nvdcve-1.1-recent.json” and drop it here
-🧑‍💻 Usage
-1. Real Relay Scan
-bash
-Copy
-Edit
+```
+
+---
+
+## 🧑‍💻 Usage
+
+### 1. Real Relay Scan
+```bash
 python sel_scanner.py 192.168.0.10
-2. Simulated Test Mode
-bash
-Copy
-Edit
+```
+
+### 2. Simulated Test Mode
+```bash
 python sel_scanner.py 127.0.0.1 test
-3. Manual Demo Mode
-bash
-Copy
-Edit
+```
+
+### 3. Manual Demo Mode
+```bash
 python sel_scanner.py demo SEL-787 R110-V1
 # add “test” at end to simulate elevation & FTP too
-📁 Project Layout
-graphql
-Copy
-Edit
+```
+
+---
+
+## 📁 Project Layout
+
+```
 relayred/
 ├── sel_scanner.py           # main CLI scanner
 ├── sel_fingerprint.py       # telnet “id” parser
 ├── sel_ftp.py               # ftp default‑creds tester
 ├── nvdcve-1.1-recent.json   # NVD CVE feed (download manually)
 └── .gitignore
-🌈 Example Output
-text
-Copy
-Edit
+```
+
+---
+
+## 🌈 Example Output
+
+```text
 🇨🇭 scanning relay at 10.190.42.105
 
 📡 telnet fingerprint result:
@@ -92,10 +102,19 @@ Edit
 ✔️ cve_report.txt saved
 
 🔌 ftp login success for 10.190.42.105
-🙌 Contributors
-Relay Red Team
-Erin Cana · Ty Lavergne · Damian Lall · Ryan Kabir · Samuel Mueller
+```
 
-⚠️ Disclaimer
-For research & lab use only.
-Please do not scan devices you do not own or have permission to test.
+---
+
+## 🙌 Contributors
+
+**Relay Red Team**  
+Erin Cana · Ty Lavergne · Damian Lall · Ryan Kabir · Samuel Mueller  
+
+---
+
+## ⚠️ Disclaimer
+
+For research & lab use only.  
+Please **do not** scan devices you do not own or have permission to test.
+```
