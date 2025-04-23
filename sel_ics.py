@@ -6,7 +6,7 @@ from rich.table import Table
 from rich.panel import Panel
 from rich import box
 
-class SEL787Scanner:
+class ICS_Scanner:
     def __init__(self, ip, port=502, test_mode=False):
         self.ip = ip
         self.port = port
@@ -47,8 +47,8 @@ class SEL787Scanner:
 
     def finalize(self):
         with open("ics_results.txt", "w") as f:
-            for line in self.report:
-                f.write(line + "\n")
+            for label, value in self.register_data + self.coil_data + self.discrete_input_data + self.input_register_data:
+                f.write(f"{label}: {value}\n")
         self.display_table("Registers", self.register_data)
         self.display_table("Coils", self.coil_data)
         self.display_table("Discrete Inputs", self.discrete_input_data)
@@ -208,5 +208,5 @@ class SEL787Scanner:
 
 if __name__ == "__main__":
     target_ip = "10.190.42.105"
-    scanner = SEL787Scanner(target_ip, test_mode=False)
+    scanner = ICS_Scanner(target_ip, test_mode=False)
     scanner.scan()
