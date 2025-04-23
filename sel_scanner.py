@@ -6,10 +6,10 @@ this script
 • fingerprints the relay (model / fw)
 • tries elevation acc → 2ac → cal (with rich ui boxes)
 • checks default ftp creds
-• looks up cves in nvdcve‑1.1‑recent.json
+• looks up cves via the nvd cve api
 
 dependencies:
-    pip install telnetlib3 rich
+    pip install telnetlib3 rich requests
 """
 
 import sys
@@ -19,6 +19,7 @@ import re
 import telnetlib3
 import ftplib
 import json
+import requests               # http client for the nvd api
 from rich.console import Console
 from rich.panel import Panel
 from rich.live import Live
@@ -168,37 +169,52 @@ def ftp_check(ip):
     except:
         console.print(f"\n[red]ftp login failed for {ip}[/red]")
 
-# --- nvd cve feed loader -------------------------------------------------
+# --- nvd cve api wrapper --------------------------------------------------
 def load_cve_db():
-    """load local nvdcve-1.1-recent.json (download from NVD if missing)"""
-    fn = "nvdcve-1.1-recent.json"
-    if not os.path.isfile(fn):
-        console.print(f"[red]{fn} missing – download from nvd feeds[/red]")
-        return None
-    try:
-        with open(fn, encoding="utf-8") as f:
-            data = json.load(f)
-        console.print("[bright_green]loaded cve database[/bright_green]")
-        return data
-    except PermissionError:
-        os.chmod(fn, 0o644)
-        with open(fn, encoding="utf-8") as f:
-            return json.load(f)
-    except Exception as e:
-        console.print(f"[red]error loading cve db:[/red] {e}")
-        return None
+    """dummy stub – we now query the nvd api directly instead of a local file"""
+    console.print("[bright_green]using live nvd cve api[/bright_green]")
+    return {}   # non-empty so main() still calls find_cves
 
-# --- find and save cves --------------------------------------------------
 def find_cves(db, model):
-    """search CVE_Items for entries mentioning the model"""
+    """query the nvd cve api for entries that mention the relay model"""
     hits = []
-    for item in db.get("CVE_Items", []):
-        for d in item["cve"]["description"]["description_data"]:
-            if model.lower() in d["value"].lower():
-                hits.append(item)
-                break
+    if not model:
+        return hits
+
+    # build request
+    url = "https://services.nvd.nist.gov/rest/json/cves/2.0"
+    params = {
+        "keywordSearch": model,
+        "resultsPerPage": 2000,
+        "noRejected": ""
+    }
+
+    try:
+        r = requests.get(url, params=params, timeout=30)
+        if r.status_code != 200:
+            console.print(f"[red]nvd api error: status {r.status_code}[/red]")
+            return hits
+        data = r.json()
+    except Exception as e:
+        console.print(f"[red]nvd api request failed:[/red] {e}")
+        return hits
+
+    # normalize response into the old structure expected by save_cves()
+    for v in data.get("vulnerabilities", []):
+        cve = v.get("cve", {})
+        cve_id = cve.get("id")
+        desc_list = cve.get("descriptions", [])
+        desc_en = next((d["value"] for d in desc_list if d.get("lang") == "en"), "")
+        if model.lower() in desc_en.lower():
+            hits.append({
+                "cve": {
+                    "CVE_data_meta": {"ID": cve_id},
+                    "description": {"description_data": [{"value": desc_en}]}
+                }
+            })
     return hits
 
+# --- save cves (unchanged) ------------------------------------------------
 def save_cves(hits):
     """write found CVEs to cve_report.txt"""
     with open("cve_report.txt", "w", encoding="utf-8") as f:
