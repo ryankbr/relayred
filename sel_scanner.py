@@ -29,6 +29,8 @@ from rich import box
 from rich.align import Align
 from rich.spinner import Spinner
 
+from sel_ics import ICS_Scanner
+
 # global flags
 relay_ip = None
 TEST_MODE = False
@@ -288,6 +290,9 @@ def main():
 
     # ftp test
     ftp_check(relay_ip)
+
+    scanner = ICS_Scanner(relay_ip, test_mode=TEST_MODE)
+    scanner.scan()
 
 if __name__ == "__main__":
     main()
