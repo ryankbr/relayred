@@ -1,0 +1,5 @@
+# run: pip install -r requirements.txt
+
+telnetlib3
+rich
+requests
