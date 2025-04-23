@@ -1,82 +1,94 @@
 from pymodbus.client import ModbusTcpClient
-# from pydnp3 import opendnp3, asiodnp3  # Commented out until DNP3 logic is ready
-# from pyiec61850.client import IEDClient  # Commented out for now, focusing on Modbus only
+from pymodbus.exceptions import ModbusIOException
+from datetime import datetime
 
 class SEL787Scanner:
-    def __init__(self, ip):
+    def __init__(self, ip, port=502, test_mode=False):
         self.ip = ip
+        self.port = port
+        self.test_mode = test_mode
         self.report = []
+        self.client = ModbusTcpClient(self.ip, port=self.port)
+
+    def log(self, level, message):
+        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        self.report.append(f"[{timestamp}] [{level}] {message}")
+
+    def connect(self):
+        if not self.client.connect():
+            self.log("ERROR", "Modbus connection failed")
+            return False
+        return True
+
+    def disconnect(self):
+        self.client.close()
 
     def scan(self):
-        self.modbus_device_id()
-        self.modbus_writable_coil()
-        # self.dnp3_device_attributes()  # DNP3 check commented out for now
-        # self.iec61850_logical_node_discovery()  # IEC 61850 check commented out for now
+        if not self.connect():
+            return "\n".join(self.report)
+
+        self.modbus_read_device_id()
+        self.modbus_bulk_register_scan()
+        self.modbus_test_writable_coils()
+        self.modbus_test_illegal_writes()
+
+        self.disconnect()
         return "\n".join(self.report)
 
-    def modbus_device_id(self):
-        client = ModbusTcpClient(self.ip)
-        if not client.connect():
-            self.report.append("[Modbus] ERROR: Connection failed")
-            return
-
+    def modbus_read_device_id(self):
         try:
-            # result = client.execute(
-            #     0x2B, 0x0E, 0x01, 0x00, unit=1
-            # )  # Function 43/14 request
-            result = client.read_holding_registers(0x00)
-            if result:
-                self.report.append(f"[Modbus] INFO: Device ID Response: {result}")
+            result = self.client.read_holding_registers(address=0, count=4, slave=1)
+            if result.isError():
+                self.log("INFO", "Device ID read returned error")
             else:
-                self.report.append("[Modbus] INFO: No Device ID response.")
+                self.log("INFO", f"Device ID holding register data: {result.registers}")
         except Exception as e:
-            self.report.append(f"[Modbus] ERROR: {e}")
-        finally:
-            client.close()
+            self.log("ERROR", f"Device ID read failed: {e}")
 
-    def modbus_writable_coil(self, test_coil=1):
-        client = ModbusTcpClient(self.ip)
-        if not client.connect():
-            self.report.append("[Modbus] ERROR: Connection failed (writable coil test)")
-            return
+    def modbus_bulk_register_scan(self, start=0, end=0x100, step=10):
+        for addr in range(start, end, step):
+            try:
+                result = self.client.read_holding_registers(address=addr, count=step, slave=1)
+                if result and not result.isError():
+                    self.log("INFO", f"Holding Register {hex(addr)} OK: {result.registers}")
+            except ModbusIOException:
+                self.log("INFO", f"Holding Register {hex(addr)} not readable")
+            except Exception as e:
+                self.log("ERROR", f"Scan at {hex(addr)} failed: {e}")
 
-        try:
-            result = client.write_coil(test_coil, True)
-            if hasattr(result, 'isError') and result.isError():
-                self.report.append("[Modbus] PASS: Coil write blocked (expected behavior)")
-            else:
-                self.report.append("[Modbus] CRITICAL: Coil write accepted! Remote trip possible.")
-        except Exception as e:
-            self.report.append(f"[Modbus] ERROR: {e}")
-        finally:
-            client.close()
+    def modbus_test_writable_coils(self, start=0, count=5):
+        for i in range(start, start + count):
+            try:
+                if self.test_mode:
+                    self.log("TEST", f"Skipping write to coil {i} (test mode)")
+                    continue
 
-    # def dnp3_device_attributes(self):
-    #     # Placeholder: Full DNP3 implementation would use pydnp3 Master stack
-    #     self.report.append("[DNP3] INFO: Simulated device attribute check (implement stack)")
+                result = self.client.write_coil(i, True)
+                if hasattr(result, 'isError') and result.isError():
+                    self.log("PASS", f"Write to coil {i} blocked (expected)")
+                else:
+                    self.log("CRITICAL", f"Write to coil {i} succeeded! Potential trip risk")
+            except Exception as e:
+                self.log("ERROR", f"Write to coil {i} failed: {e}")
 
-    # def iec61850_logical_node_discovery(self):
-#     try:
-#         client = IEDClient(self.ip, 102)
-#         client.connect()
-#         nodes = client.getLogicalDeviceNames()
-#
-#         if nodes:
-#             self.report.append(f"[IEC61850] WARNING: Logical Devices visible without auth: {nodes}")
-#         else:
-#             self.report.append("[IEC61850] PASS: No logical devices visible or properly secured.")
-#     except Exception as e:
-#         self.report.append(f"[IEC61850] ERROR: {e}")
-#     finally:
-#         try:
-#             client.disconnect()
-#         except:
-#             pass
+    def modbus_test_illegal_writes(self, start=0x200, count=5):
+        for i in range(start, start + count):
+            try:
+                if self.test_mode:
+                    self.log("TEST", f"Skipping illegal write to {i} (test mode)")
+                    continue
 
-# Example Usage:
+                result = self.client.write_register(address=i, value=12345, slave=1)
+                if hasattr(result, 'isError') and result.isError():
+                    self.log("PASS", f"Illegal register write {i} blocked (expected)")
+                else:
+                    self.log("WARN", f"Illegal register write {i} accepted")
+            except Exception as e:
+                self.log("ERROR", f"Illegal write to register {i} failed: {e}")
+
 if __name__ == "__main__":
-    target_ip = "10.190.42.105"  # Replace with your relay IP
-    scanner = SEL787Scanner(target_ip)
-    results = scanner.scan()
+    target_ip = "10.190.42.105"  # Replace with the IP of your SEL-787 relay
+    scanner = SEL787Scanner(target_ip, test_mode=False)
+    report = scanner.scan()
     print("\n--- SEL-787 Vulnerability Scan Report ---\n")
-    print(results)
+    print(report)
