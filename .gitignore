@@ -8,10 +8,6 @@ __pycache__/
 .env
 .vscode/
 
-# cve data - if it's downloaded or large
-cvelistV5-main/
-cve_report.txt
-
 # OS-generated files
 .DS_Store
 Thumbs.db
